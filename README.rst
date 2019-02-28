@@ -68,7 +68,7 @@ Examples
 
 5. Generate multiple load scenarios from a .json file
 
-    ./CPULoadGenerator -f scenario.json
+    ./CPULoadGenerator.py -f scenario.json
 
 6. Example graph of CPU load:
 
