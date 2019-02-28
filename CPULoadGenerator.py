@@ -7,6 +7,7 @@ import itertools
 import multiprocessing
 import os
 import signal
+import json
 
 import click
 import psutil
@@ -105,6 +106,10 @@ def __validate_sampling_interval(ctx, param, value):
             f'Sampling interval cannot be negative ({value}).')
     return value
 
+# default values
+DEFAULT_CORE = psutil.Process(os.getpid()).cpu_affinity()
+DEFAULT_LOAD = [0.2]
+DEFAULT_DURATION = -1
 
 @click.command()
 @click.option('--core', '-c',
@@ -113,16 +118,16 @@ def __validate_sampling_interval(ctx, param, value):
               help='CPU core to artificially load. '
                    'Can be specified multiple times to load multiple cores, '
                    'default is all cores.',
-              default=psutil.Process(os.getpid()).cpu_affinity(),
+              default=DEFAULT_CORE,
               show_default=True)
 @click.option('--cpu_load', '-l',
               type=float, multiple=True,
               help='Target CPU load. If only one value is provided, '
                    'it is applied to all affected cores, otherwise specifies '
                    'load per affected core.',
-              default=[0.2], show_default=True, callback=__validate_cpu_load)
+              default=DEFAULT_LOAD, show_default=True, callback=__validate_cpu_load)
 @click.option('--duration', '-d',
-              type=float, default=-1, show_default=True,
+              type=float, default=DEFAULT_DURATION, show_default=True,
               help='Duration in seconds. If omitted or negative, '
                    'program will run until a SIGINT or SIGTERM is received.')
 @click.option('--plot', '-p',
@@ -135,32 +140,74 @@ def __validate_sampling_interval(ctx, param, value):
                    'for the internal PI controller. '
                    'Changing this value is strongly discouraged!',
               callback=__validate_sampling_interval)
-def __main(core, cpu_load, duration, plot, sampling_interval):
-    if plot and duration < 0:
+@click.option('--json-file', '-f',
+              type=click.Path(exists=True), default=None,
+              help='provide path to a scenario .json file')
+def __main(core, cpu_load, duration, plot, sampling_interval, json_file):
+    if plot and json_file:
         raise click.BadOptionUsage(
-            'Plot option can only be used with a fixed duration.')
+            'Plot for scenario is not supported!')
+    
+    if json_file:
+            with open(json_file, 'r') as f:
+                content = json.load(f)
+            
+            repeat = content['repeat'] if 'repeat' in content else 1
+            scenario = content['scenario']
 
-    if len(cpu_load) > 1 and len(cpu_load) != len(core):
-        raise click.BadOptionUsage('Number of cores and loads does not match.')
-    elif len(cpu_load) == 1:
-        cpu_load = itertools.repeat(cpu_load[0], len(core))
+            for _ in range(repeat):
+                for scen in scenario:
+                    core = scen['core'] if 'core' in scen else DEFAULT_CORE
+                    cpu_load = scen['cpu_load'] if 'cpu_load' in scen else DEFAULT_LOAD
+                    duration = scen['duration'] if 'duration' in scen else DEFAULT_DURATION
+                    
+                    if len(cpu_load) > 1 and len(cpu_load) != len(core):
+                        raise click.BadOptionUsage('Number of cores and loads does not match.')
+                    elif len(cpu_load) == 1:
+                        cpu_load = itertools.repeat(cpu_load[0], len(core))
 
-    # filter out repeated core indexes
-    core = list(set(core))
+                    # disable signal handlers before spawning processes
+                    signal.signal(signal.SIGINT, signal.SIG_IGN)
+                    signal.signal(signal.SIGTERM, signal.SIG_IGN)
 
-    # disable signal handlers before spawning processes
-    signal.signal(signal.SIGINT, signal.SIG_IGN)
-    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+                    # spawn one process per core
+                    with multiprocessing.Pool(len(core)) as pool:
+                        pool.starmap(load_core, zip(
+                            core,
+                            cpu_load,
+                            itertools.repeat(duration),
+                            itertools.repeat(plot),
+                            itertools.repeat(sampling_interval)
+                        ))
 
-    # spawn one process per core
-    with multiprocessing.Pool(len(core)) as pool:
-        pool.starmap(load_core, zip(
-            core,
-            cpu_load,
-            itertools.repeat(duration),
-            itertools.repeat(plot),
-            itertools.repeat(sampling_interval)
-        ))
+            print('done!')
+        
+    else:
+        if plot and duration < 0:
+            raise click.BadOptionUsage(
+                'Plot option can only be used with a fixed duration.')
+
+        if len(cpu_load) > 1 and len(cpu_load) != len(core):
+            raise click.BadOptionUsage('Number of cores and loads does not match.')
+        elif len(cpu_load) == 1:
+            cpu_load = itertools.repeat(cpu_load[0], len(core))
+
+        # filter out repeated core indexes
+        core = list(set(core))
+
+        # disable signal handlers before spawning processes
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+
+        # spawn one process per core
+        with multiprocessing.Pool(len(core)) as pool:
+            pool.starmap(load_core, zip(
+                core,
+                cpu_load,
+                itertools.repeat(duration),
+                itertools.repeat(plot),
+                itertools.repeat(sampling_interval)
+            ))
 
 
 if __name__ == '__main__':

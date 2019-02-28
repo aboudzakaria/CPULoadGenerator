@@ -66,7 +66,11 @@ Examples
 
     ./CPULoadGenerator.py -l 0.12 -c 0 -c 1 -d 20.5 --plot
 
-5. Example graph of CPU load:
+5. Generate multiple load scenarios from a .json file
+
+    ./CPULoadGenerator -f scenario.json
+
+6. Example graph of CPU load:
 
 .. image:: https://raw.githubusercontent.com/molguin92/CPULoadGenerator/python3_port_stable/50%25-Target-Load.png
     :alt: Example - 50% load on CPU core 0
