@@ -55,8 +55,8 @@ def load_core(target_core, target_load,
         actuator = ClosedLoopActuator(control, monitor,
                                       duration_seconds, target_core)
 
-    signal.signal(signal.SIGINT, __sig_handler)
-    signal.signal(signal.SIGTERM, __sig_handler)
+    #signal.signal(signal.SIGINT, __sig_handler)
+    #signal.signal(signal.SIGTERM, __sig_handler)
 
     try:
         monitor.start()
@@ -69,8 +69,8 @@ def load_core(target_core, target_load,
 
     finally:
         # shutting down, so ignore any signals
-        signal.signal(signal.SIGINT, signal.SIG_IGN)
-        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+        #signal.signal(signal.SIGINT, signal.SIG_IGN)
+        #signal.signal(signal.SIGTERM, signal.SIG_IGN)
 
         actuator.close()
 
@@ -167,8 +167,8 @@ def __main(core, cpu_load, duration, plot, sampling_interval, json_file):
                         cpu_load = itertools.repeat(cpu_load[0], len(core))
 
                     # disable signal handlers before spawning processes
-                    signal.signal(signal.SIGINT, signal.SIG_IGN)
-                    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+                    #signal.signal(signal.SIGINT, signal.SIG_IGN)
+                    #signal.signal(signal.SIGTERM, signal.SIG_IGN)
 
                     # spawn one process per core
                     with multiprocessing.Pool(len(core)) as pool:
@@ -196,8 +196,8 @@ def __main(core, cpu_load, duration, plot, sampling_interval, json_file):
         core = list(set(core))
 
         # disable signal handlers before spawning processes
-        signal.signal(signal.SIGINT, signal.SIG_IGN)
-        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+        #signal.signal(signal.SIGINT, signal.SIG_IGN)
+        #signal.signal(signal.SIGTERM, signal.SIG_IGN)
 
         # spawn one process per core
         with multiprocessing.Pool(len(core)) as pool:
