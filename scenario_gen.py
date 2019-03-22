@@ -8,9 +8,13 @@ import json
 import matplotlib.pyplot as plt
 
 
+ROUND_DIGITS = 2
+
+#TIMESTEP_DISTR = 20
 #TIMESTEP_DISTR = sp.geom
-TIMESTEP_DISTR = 20
-TIMESTEP_DISTR_ARGS = {'p': 0.2}
+#TIMESTEP_DISTR_ARGS = {'p': 0.2}
+TIMESTEP_DISTR = sp.randint
+TIMESTEP_DISTR_ARGS = {'low': 20, 'high': 40}
 
 WALK_DISTR = sp.beta
 WALK_ARGS = {'a': 0.8, 'b': 0.8}
@@ -58,6 +62,7 @@ class TimeSerie:
             yield duration, value
 
     def append(self, time, value):
+        value = round(value, ROUND_DIGITS)
         done = False
         if time > self.current_time:
             duration = time - self.current_time
@@ -68,9 +73,13 @@ class TimeSerie:
             done = True
         return done
 
-    def set_next(self):
-        timestep = self.timestep_variable.get()
-        value = self.value_variable.get()
+    def get_timestep(self):
+        return self.timestep_variable.get()
+
+    def get_value(self):
+        return self.value_variable.get()
+
+    def set_next(self, timestep, value):
         done = False
         time = self.current_time + timestep
         if self.current_time < self.end_time:
@@ -83,7 +92,9 @@ class TimeSerie:
     def fill(self):
         done = True
         while done:
-            done = self.set_next()
+            timestep = self.get_timestep()
+            value = self.get_value()
+            done = self.set_next(timestep, value)
 
     def export_json(self, out_file, repeat=1, indent=None):
         dic = dict()
@@ -107,6 +118,9 @@ class TimeSerie:
 
 
 class CPULoad(TimeSerie):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
     def plot(self, *args, **kwargs):
         plt.ylim((0, 1))
         return TimeSerie.plot(self, *args, **kwargs)
@@ -117,8 +131,9 @@ class CPULoadCst(CPULoad):
                  timestep_variable=Variable(TIMESTEP_DISTR,
                                             **TIMESTEP_DISTR_ARGS)):
         value_variable = Variable(start_value)
-        TimeSerie.__init__(self, start_time, duration, start_value,
-                           timestep_variable, value_variable)
+        super().__init__(start_time, duration, start_value,
+                         timestep_variable, value_variable)
+        self.args = (start_value, start_time, duration, timestep_variable)
 
 
 class CPULoadRandomWalk(CPULoad):
@@ -127,18 +142,22 @@ class CPULoadRandomWalk(CPULoad):
                                             **TIMESTEP_DISTR_ARGS)):
         value_variable = Variable(WALK_DISTR, scale=step_scale,
                                   loc=-step_scale / 2, **WALK_ARGS)
-        TimeSerie.__init__(self, start_time, duration, start_value,
-                           timestep_variable, value_variable)
+        super().__init__(start_time, duration, start_value,
+                         timestep_variable, value_variable)
+        self.args = (start_value, step_scale, start_time, duration,
+                     timestep_variable)
 
-    def set_next(self):
-        timestep = self.timestep_variable.get()
+    def get_value(self):
         walk = self.value_variable.get()
         value = max(0., min(1., self.current_value + walk))
-        done = False
-        time = self.current_time + timestep
-        if self.current_time < self.end_time:
-            if time < self.end_time:
-                done = self.append(time, value)
-            else:
-                done = self.append(self.end_time, self.current_value)
-        return done
+        return value
+
+
+def compose_timeserie(timeserie, func):
+    times = [timeserie.start_time]
+    values = [timeserie.start_value]
+    for duration, value in timeserie:
+        time = times[-1] + duration
+        times.append(time)
+        values.append(value * func(time))
+    timeserie.values = values
