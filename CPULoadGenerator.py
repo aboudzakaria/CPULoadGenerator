@@ -12,6 +12,7 @@ import json
 import click
 import psutil
 
+from random import randint
 from utils.ClosedLoopActuator import ClosedLoopActuator, \
     PlottingClosedLoopActuator
 from utils.Controller import ControllerThread
@@ -154,12 +155,27 @@ def __main(core, cpu_load, duration, plot, sampling_interval, json_file):
             
             repeat = content['repeat'] if 'repeat' in content else 1
             scenario = content['scenario']
-
-            for _ in range(repeat):
+            count = 0
+            while True:
+                if repeat != -1:
+                    count += 1
+                    if count > repeat:
+                        break
                 for scen in scenario:
                     core = scen['core'] if 'core' in scen else DEFAULT_CORE
                     cpu_load = scen['cpu_load'] if 'cpu_load' in scen else DEFAULT_LOAD
                     duration = scen['duration'] if 'duration' in scen else DEFAULT_DURATION
+                    
+                    for i in range(len(cpu_load)):
+                        if isinstance(cpu_load[i], str):
+                            m, a, b = cpu_load[i].split()
+                            a, b = int(float(a) * 100), int(float(b) * 100)
+                            cpu_load[i] = randint(a, b) / 100
+                    
+                    if isinstance(duration, str):
+                        m, a, b = duration.split()
+                        a, b = int(a), int(b)
+                        duration = randint(a, b)
                     
                     if len(cpu_load) > 1 and len(cpu_load) != len(core):
                         raise click.BadOptionUsage('Number of cores and loads does not match.')
